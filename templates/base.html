@@ -1,0 +1,19 @@
+<!doctype html><html lang="en" data-theme="light"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Hanumakonda Healthcare NLP{% endblock %}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<script>
+(function(){const saved=localStorage.getItem('hh-theme')||'light';document.documentElement.dataset.theme=saved;})();
+</script></head><body>
+<header class="topbar"><a class="brand" href="{{ url_for('index') if logged_in_user and logged_in_user.role=='patient' else (url_for('doctor') if logged_in_user and logged_in_user.role=='doctor' else (url_for('admin') if logged_in_user else url_for('login'))) }}"><span class="brand-icon">✚</span><span>Hanumakonda <small>Healthcare NLP</small></span></a>
+<div class="nav-right">
+{% if logged_in_user %}
+<nav>{% if logged_in_user.role=='patient' %}<a href="{{url_for('index')}}">Patient</a><a href="{{url_for('reports')}}">My reports</a>{% elif logged_in_user.role=='doctor' %}<a href="{{url_for('doctor')}}">Doctor review</a>{% else %}<a href="{{url_for('admin')}}">Research dashboard</a>{% endif %}</nav>
+<span class="user-chip">{{logged_in_user.display_name}} · {{logged_in_user.role}}</span><a class="logout" href="{{url_for('logout')}}">Sign out</a>
+{% endif %}
+<button class="theme-toggle" id="themeToggle" type="button" aria-label="Toggle theme">☾ / ☀</button></div></header>
+<main class="container">{% with messages=get_flashed_messages() %}{% if messages %}<div class="flash">{% for m in messages %}<p>{{m}}</p>{% endfor %}</div>{% endif %}{% endwith %}{% block content %}{% endblock %}</main>
+<footer>Educational research prototype · Not a medical diagnosis · Do not enter real patient data</footer>
+<script>
+document.getElementById('themeToggle')?.addEventListener('click',()=>{const next=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=next;localStorage.setItem('hh-theme',next);});
+</script>{% block scripts %}{% endblock %}</body></html>

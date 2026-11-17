@@ -1,0 +1,11 @@
+text,category
+fever headache,General symptom category
+headache body_pain,General symptom category
+cough sore_throat,Respiratory symptom category
+cough fever,Respiratory symptom category
+stomach_pain vomiting,Digestive symptom category
+stomach_pain diarrhea,Digestive symptom category
+fever body_pain,General symptom category
+sore_throat cough,Respiratory symptom category
+vomiting stomach_pain,Digestive symptom category
+headache fever,General symptom category

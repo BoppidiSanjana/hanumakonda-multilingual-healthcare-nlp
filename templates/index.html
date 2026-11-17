@@ -1,0 +1,50 @@
+{% extends "base.html" %}{% block title %}Patient portal{% endblock %}
+{% block content %}
+<section class="hero"><div><span class="eyebrow">PATIENT PORTAL · MULTILINGUAL NLP</span><h1>Describe your symptoms.<br><em>Use your language.</em></h1><p>Enter symptoms in English, Telugu, Hindi, or mixed language. Review the extracted information, answer follow-up questions, and then create your report.</p><div class="language-pills"><span>English</span><span>తెలుగు</span><span>हिन्दी</span><span>Mixed language</span></div></div><div class="hero-art"><div class="pulse">✚</div><div class="orbit orbit1"></div><div class="orbit orbit2"></div><div class="mini-card">NLP <b>AI</b><small>Language understanding</small></div></div></section>
+<section class="panel"><div class="section-heading"><div><span class="eyebrow">STEP 1</span><h2>Describe your symptoms</h2></div><span class="status-dot">Prototype</span></div>
+<form id="symptomForm"><label for="symptoms">How are you feeling?</label><textarea id="symptoms" rows="5" required placeholder="Example: I have fever and headache for 3 days&#10;నాకు జ్వరం ఉంది&#10;मुझे बुखार है"></textarea>
+<div class="form-row"><div><label for="preferred">Preferred report language</label><select id="preferred"><option>English</option><option>Telugu</option><option>Hindi</option></select></div><div class="helper">Report language can differ from the language used to describe symptoms.</div></div><button class="button" type="submit">Analyze and continue →</button></form>
+<div id="loading" class="loading hidden">Analyzing your description…</div><div id="analysisResult" class="result hidden"></div>
+<div id="followupPanel" class="followup-panel hidden"><div class="section-heading"><div><span class="eyebrow">STEP 2</span><h2>Answer follow-up questions</h2><p class="muted">Your answers will be included in the final report.</p></div></div><form id="followupForm"><div id="questionFields"></div><button class="button" type="submit">Submit answers and generate report →</button></form></div>
+<div id="finalLoading" class="loading hidden">Generating your report…</div><div id="finalResult" class="result hidden"></div></section>
+<section class="grid3"><article class="feature"><div class="feature-icon">文</div><h3>Multilingual NLP</h3><p>Starter language detection and keyword-based symptom extraction.</p></article><article class="feature"><div class="feature-icon">⌕</div><h3>Interactive follow-up</h3><p>Answer duration, severity, breathing, fever and other detail questions.</p></article><article class="feature"><div class="feature-icon">▤</div><h3>Report workflow</h3><p>Save a report with original input and your follow-up answers.</p></article></section>
+{% endblock %}
+{% block scripts %}<script>
+let currentDraft=null;
+const $=id=>document.getElementById(id);
+const pretty=s=>String(s).replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase());
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+$('symptomForm').addEventListener('submit',async e=>{
+ e.preventDefault();$('analysisResult').classList.add('hidden');$('finalResult').classList.add('hidden');$('followupPanel').classList.add('hidden');$('loading').classList.remove('hidden');
+ try{
+  const res=await fetch('/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({symptoms:$('symptoms').value,preferred_language:$('preferred').value})});
+  const d=await res.json();if(!res.ok)throw new Error(d.error||'Unable to analyze');
+  currentDraft={symptoms:$('symptoms').value,preferred_language:$('preferred').value};
+  $('analysisResult').innerHTML=`<h3>Initial text analysis</h3><div class="result-grid"><div><small>Detected language</small><b>${esc(d.analysis.language)}</b></div><div><small>Extracted symptoms</small><b>${esc(d.analysis.symptoms.map(pretty).join(', ')||'None detected')}</b></div><div><small>Duration</small><b>${esc(d.analysis.duration||'Not provided')}</b></div><div><small>Severity</small><b>${esc(d.analysis.severity||'Not provided')}</b></div></div><p class="notice">${esc(d.notice)}</p>`;
+  $('analysisResult').classList.remove('hidden');
+  const fields=$('questionFields');fields.innerHTML='';
+  d.questions.forEach(q=>{
+   let input='';
+   if(q.type==='select')input=`<select name="${esc(q.key)}" required><option value="">Choose an answer</option>${q.options.map(o=>`<option value="${esc(o.toLowerCase())}">${esc(o)}</option>`).join('')}</select>`;
+   else if(q.type==='yesno')input=`<select name="${esc(q.key)}" required><option value="">Choose an answer</option><option value="yes">Yes</option><option value="no">No</option></select>`;
+   else if(q.type==='textarea')input=`<textarea name="${esc(q.key)}" rows="3" placeholder="${esc(q.placeholder||'')}"></textarea>`;
+   else input=`<input name="${esc(q.key)}" type="text" placeholder="${esc(q.placeholder||'')}" ${q.key==='duration'?'required':''}>`;
+   fields.insertAdjacentHTML('beforeend',`<label class="question">${esc(q.label)}${input}</label>`);
+  });
+  $('followupPanel').classList.remove('hidden');$('followupPanel').scrollIntoView({behavior:'smooth',block:'start'});
+ }catch(err){$('analysisResult').innerHTML=`<p class="error">${esc(err.message)}</p>`;$('analysisResult').classList.remove('hidden');}
+ finally{$('loading').classList.add('hidden');}
+});
+$('followupForm').addEventListener('submit',async e=>{
+ e.preventDefault();if(!currentDraft)return;
+ const answers=Object.fromEntries(new FormData(e.currentTarget).entries());
+ $('finalLoading').classList.remove('hidden');$('finalResult').classList.add('hidden');
+ try{
+  const res=await fetch('/complete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...currentDraft,answers})});
+  const d=await res.json();if(!res.ok)throw new Error(d.error||'Unable to generate report');
+  $('finalResult').innerHTML=`<div class="section-heading"><div><span class="eyebrow">STEP 3 COMPLETE</span><h2>Report generated</h2></div><span class="status-dot">Saved</span></div><p>Your follow-up answers have been included in report <b>${esc(d.report_id)}</b>.</p><a class="button" href="${esc(d.redirect)}">Open full report →</a>`;
+  $('finalResult').classList.remove('hidden');$('finalResult').scrollIntoView({behavior:'smooth'});
+ }catch(err){$('finalResult').innerHTML=`<p class="error">${esc(err.message)}</p>`;$('finalResult').classList.remove('hidden');}
+ finally{$('finalLoading').classList.add('hidden');}
+});
+</script>{% endblock %}
