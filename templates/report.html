@@ -1,10 +1,209 @@
-{% extends "base.html" %}{% block title %}Report {{r.id}}{% endblock %}{% block content %}
-<div class="page-title"><span class="eyebrow">PATIENT REPORT</span><h1>Symptom analysis report</h1><p>Reference {{r.id}} · {{r.created_at}}</p></div><div class="panel">
-<div class="notice">Research prototype only. The predicted category is not a diagnosis. Consult a qualified healthcare professional.</div>
-<h2>Original description</h2><blockquote>{{r.original_text}}</blockquote>
-<div class="result-grid"><div><small>Detected language</small><b>{{analysis.language}}</b></div><div><small>Preferred report language</small><b>{{r.preferred_language}}</b></div><div><small>Duration</small><b>{{analysis.duration or 'Not provided'}}</b></div><div><small>Severity</small><b>{{analysis.severity or 'Not provided'}}</b></div></div>
-<h2>Extracted symptoms</h2><p>{{analysis.symptoms|join(', ') if analysis.symptoms else 'None detected by starter lexicon'}}</p><h2>Negated symptoms</h2><p>{{analysis.negated_symptoms|join(', ') if analysis.negated_symptoms else 'None detected'}}</p>
-<h2>Follow-up questions and answers</h2>{% for k,v in answers.items() %}<div class="answer-row"><b>{{k|replace('_',' ')|title}}</b><span>{{v or 'Not provided'}}</span></div>{% else %}<p>No answers saved.</p>{% endfor %}
-<h2>Classification output</h2><h3>{{prediction.category}}</h3><p>{{prediction.explanation}}</p>
-<h2>Doctor / reviewer notes</h2>{% for rv in reviews %}<div class="review"><b>{{rv.reviewer}}</b><small>{{rv.created_at}}</small><p>{{rv.notes}}</p></div>{% else %}<p>No reviewer notes yet.</p>{% endfor %}
-<div class="actions"><a class="button" href="{{url_for('download_report',report_id=r.id)}}">Print / Save PDF</a>{% if logged_in_user.role=='patient' %}<a class="button secondary" href="{{url_for('reports')}}">My reports</a>{% else %}<a class="button secondary" href="{{url_for('doctor')}}">Back to reviews</a>{% endif %}</div></div>{% endblock %}
+
+{% extends "base.html" %}
+
+{% block title %}Report {{ r.id }}{% endblock %}
+
+{% block content %}
+
+<div class="page-title">
+    <span class="eyebrow">PATIENT REPORT</span>
+    <h1>Symptom Analysis Report</h1>
+    <p>Reference {{ r.id }} · {{ r.created_at }}</p>
+</div>
+
+<div class="panel">
+
+    <div class="notice">
+        Research prototype only. The predicted category is not a diagnosis.
+        Consult a qualified healthcare professional.
+    </div>
+
+    <!-- ORIGINAL DESCRIPTION -->
+    <h2>Original Description</h2>
+    <blockquote>{{ r.original_text }}</blockquote>
+
+    <!-- PATIENT INFORMATION -->
+    <div class="result-grid">
+
+        <div>
+            <small>Detected Language</small>
+            <b>{{ analysis.language }}</b>
+        </div>
+
+        <div>
+            <small>Preferred Report Language</small>
+            <b>{{ r.preferred_language }}</b>
+        </div>
+
+        <div>
+            <small>Duration</small>
+            <b>{{ analysis.duration or 'Not provided' }}</b>
+        </div>
+
+        <div>
+            <small>Severity</small>
+            <b>{{ analysis.severity or 'Not provided' }}</b>
+        </div>
+
+    </div>
+
+    <!-- EXTRACTED SYMPTOMS -->
+    <h2>Extracted Symptoms</h2>
+
+    <p>
+        {{ analysis.symptoms|join(', ') if analysis.symptoms
+        else 'None detected by starter lexicon' }}
+    </p>
+
+    <!-- NEGATED SYMPTOMS -->
+    <h2>Negated Symptoms</h2>
+
+    <p>
+        {{ analysis.negated_symptoms|join(', ')
+        if analysis.negated_symptoms else 'None detected' }}
+    </p>
+
+    <!-- FOLLOW-UP ANSWERS -->
+    <h2>Follow-up Questions and Answers</h2>
+
+    {% for k, v in answers.items() %}
+
+        <div class="answer-row">
+            <b>{{ k|replace('_', ' ')|title }}</b>
+            <span>{{ v or 'Not provided' }}</span>
+        </div>
+
+    {% else %}
+
+        <p>No answers saved.</p>
+
+    {% endfor %}
+
+    <!-- CLASSIFICATION -->
+    <h2>Classification Output</h2>
+
+    <h3>{{ prediction.category }}</h3>
+
+    <p>{{ prediction.explanation }}</p>
+
+    <!-- SPECIALIST RECOMMENDATIONS -->
+    {% set care = prediction.get('care_recommendations', {}) %}
+
+    <h2>Recommended Healthcare Support</h2>
+
+    <div class="notice">
+        {{ care.get('message', 'Please consult a qualified healthcare professional for guidance.') }}
+    </div>
+
+    {% if care.get('urgent') %}
+
+        <h3>Urgent Medical Attention</h3>
+
+        <p>
+            A possible warning sign was identified.
+            Please seek urgent professional medical care.
+            Do not delay care while searching for a specialist.
+        </p>
+
+    {% else %}
+
+        <h3>Suggested Medical Specialists</h3>
+
+        {% for doctor in care.get('specialists', []) %}
+
+            <div class="answer-row">
+
+                <b>{{ doctor.name }}</b>
+
+                <a href="{{ doctor.maps_url }}"
+                   target="_blank"
+                   rel="noopener noreferrer">
+                    Find Nearby
+                </a>
+
+            </div>
+
+        {% else %}
+
+            <p>
+                No specific specialist was identified.
+                Please consult a General Physician.
+            </p>
+
+        {% endfor %}
+
+    {% endif %}
+
+    <!-- NUTRITION RECOMMENDATION -->
+    {% if care.get('nutrition') %}
+
+        <h2>Nutrition Guidance</h2>
+
+        <div class="answer-row">
+
+            <div>
+                <b>{{ care.nutrition.name }}</b>
+
+                <p>{{ care.nutrition.message }}</p>
+
+                <a href="{{ care.nutrition.maps_url }}"
+                   target="_blank"
+                   rel="noopener noreferrer">
+                    Find a Nearby Dietitian
+                </a>
+            </div>
+
+        </div>
+
+    {% endif %}
+
+    <!-- DOCTOR REVIEWER NOTES -->
+    <h2>Doctor / Reviewer Notes</h2>
+
+    {% for rv in reviews %}
+
+        <div class="review">
+
+            <b>{{ rv.reviewer }}</b>
+
+            <small>{{ rv.created_at }}</small>
+
+            <p>{{ rv.notes }}</p>
+
+        </div>
+
+    {% else %}
+
+        <p>No reviewer notes yet.</p>
+
+    {% endfor %}
+
+    <!-- ACTION BUTTONS -->
+    <div class="actions">
+
+        <a class="button"
+           href="{{ url_for('download_report', report_id=r.id) }}">
+            Print / Save PDF
+        </a>
+
+        {% if logged_in_user.role == 'patient' %}
+
+            <a class="button secondary"
+               href="{{ url_for('reports') }}">
+                My Reports
+            </a>
+
+        {% else %}
+
+            <a class="button secondary"
+               href="{{ url_for('doctor') }}">
+                Back to Reviews
+            </a>
+
+        {% endif %}
+
+    </div>
+
+</div>
+
+{% endblock %}

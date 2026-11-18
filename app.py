@@ -5,6 +5,7 @@ import uuid
 import sqlite3
 from datetime import datetime, timezone
 from functools import wraps
+from urllib.parse import quote
 
 from flask import (
     Flask, render_template, request, jsonify,
@@ -321,6 +322,154 @@ def index():
     )
 
 
+
+
+# ---------------- SPECIALIST & NUTRITION GUIDANCE ----------------
+
+def build_care_recommendations(analysis, original_text=""):
+    """
+    Suggests an appropriate type of healthcare professional from reported
+    symptoms/keywords. This is navigation guidance, not a diagnosis.
+    """
+    text = (original_text or "").lower()
+    symptoms = analysis.get("symptoms", [])
+    symptom_text = " ".join(str(item).lower() for item in symptoms)
+    combined = f"{text} {symptom_text}"
+
+    # Emergency warning signs must take priority over routine referrals.
+    emergency_terms = [
+        "chest pain", "chest tightness", "heart attack",
+        "severe breathing", "difficulty breathing", "can't breathe",
+        "cannot breathe", "shortness of breath", "fainting",
+        "unconscious", "stroke", "severe bleeding"
+    ]
+    emergency = (
+        bool(analysis.get("urgent_flag"))
+        or bool(analysis.get("breathing_difficulty"))
+        or any(term in combined for term in emergency_terms)
+    )
+
+    if emergency:
+        return {
+            "urgent": True,
+            "message": (
+                "A warning sign may be present. Seek urgent medical care now "
+                "or contact local emergency services. Do not wait for an "
+                "online specialist recommendation."
+            ),
+            "specialists": [],
+            "nutrition": None
+        }
+
+    specialist_rules = [
+        (
+            ["cardiologist"],
+            ["heart", "గుండె", "दिल", "palpitation", "palpitations", "heartbeat", "blood pressure",
+             "high bp", "low bp", "cardiac", "cardiovascular"]
+        ),
+        (
+            ["dermatologist"],
+            ["skin", "చర్మం", "त्वचा", "rash", "itch", "itching", "acne", "pimple", "eczema",
+             "hair fall", "skin allergy"]
+        ),
+        (
+            ["ophthalmologist (eye specialist)"],
+            ["eye pain", "red eye", "vision", "blurred vision", "eye irritation"]
+        ),
+        (
+            ["ent specialist"],
+            ["ear pain", "ear infection", "nose", "sinus", "throat pain",
+             "sore throat", "hearing", "tonsil"]
+        ),
+        (
+            ["gastroenterologist"],
+            ["stomach pain", "కడుపు నొప్పి", "पेट दर्द", "abdominal pain", "acidity", "gastric",
+             "vomiting", "diarrhea", "diarrhoea", "constipation",
+             "digestion", "digestive"]
+        ),
+        (
+            ["orthopedic specialist"],
+            ["bone", "joint pain", "knee pain", "back pain", "fracture",
+             "muscle pain", "arthritis"]
+        ),
+        (
+            ["neurologist"],
+            ["migraine", "severe headache", "numbness", "tingling",
+             "seizure", "neurological"]
+        ),
+        (
+            ["gynecologist"],
+            ["menstrual", "period pain", "irregular periods",
+             "pregnancy", "pelvic pain"]
+        ),
+        (
+            ["pulmonologist"],
+            ["persistent cough", "wheezing", "asthma", "lung"]
+        ),
+        (
+            ["dentist"],
+            ["tooth pain", "toothache", "gum pain", "dental"]
+        )
+    ]
+
+    matched = []
+    for names, terms in specialist_rules:
+        if any(term in combined for term in terms):
+            matched.extend(names)
+
+    # Fever and common/general symptoms should start with a general physician.
+    general_terms = [
+        "fever", "జ్వరం", "बुखार", "temperature", "cold", "cough", "headache",
+        "body pain", "తలనొప్పి", "సర్ది", "దగ్గు", "బुखार",
+        "body pain", "tiredness", "fatigue", "weakness"
+    ]
+    if not matched or any(term in combined for term in general_terms):
+        matched.insert(0, "general physician")
+
+    # Preserve order and remove duplicates.
+    matched = list(dict.fromkeys(matched))
+
+    specialists = [
+        {
+            "name": name.title(),
+            "maps_url": (
+                "https://www.google.com/maps/search/?api=1&query="
+                + quote(name + " near me")
+            )
+        }
+        for name in matched
+    ]
+
+    nutrition_terms = [
+        "nutrition", "nutritional", "diet", "food", "ఆహారం", "తిండి",
+        "పోషకాహారం", "खाना", "आहार", "पोषण", "meal plan",
+        "weight loss", "weight gain", "healthy eating", "diet plan"
+    ]
+    nutrition = None
+    if any(term in text for term in nutrition_terms):
+        nutrition = {
+            "name": "Registered Dietitian / Clinical Nutritionist",
+            "message": (
+                "For personalized food or diet guidance, consult a qualified "
+                "registered dietitian or clinical nutritionist."
+            ),
+            "maps_url": (
+                "https://www.google.com/maps/search/?api=1&query="
+                + quote("registered dietitian clinical nutritionist near me")
+            )
+        }
+
+    return {
+        "urgent": False,
+        "message": (
+            "These are suggested healthcare professional categories based "
+            "on the words reported. They are not a diagnosis."
+        ),
+        "specialists": specialists,
+        "nutrition": nutrition
+    }
+
+
 # ---------------- INITIAL SYMPTOM ANALYSIS ----------------
 
 @app.route("/analyze", methods=["POST"])
@@ -428,6 +577,14 @@ def complete():
     # Generate a demonstration prediction.
     prediction = predict_category(analysis)
 
+    # Add specialist-navigation guidance based on reported symptoms.
+    # This does not diagnose a condition or replace a clinician.
+    care_recommendations = build_care_recommendations(
+        analysis,
+        symptoms_text
+    )
+    prediction["care_recommendations"] = care_recommendations
+
     # Avoid routine prediction when a warning sign is reported.
     if analysis.get("urgent_flag") or analysis.get("breathing_difficulty"):
 
@@ -438,7 +595,8 @@ def complete():
             "explanation": (
                 "A possible warning sign was reported. "
                 "Seek urgent professional medical assessment."
-            )
+            ),
+            "care_recommendations": care_recommendations
         }
 
     report_id = str(uuid.uuid4())[:8].upper()
