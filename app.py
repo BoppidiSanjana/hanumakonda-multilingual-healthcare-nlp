@@ -18,10 +18,13 @@ from ml.predictor import predict_category, model_status
 
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(APP_DIR, "instance", "healthcare.db")
+
+if os.environ.get("VERCEL"):
+    DB_PATH = "/tmp/healthcare.db"
+else:
+    DB_PATH = os.path.join(APP_DIR, "instance", "healthcare.db")
 
 os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-
 app = Flask(__name__)
 app.secret_key = os.environ.get(
     "SECRET_KEY",
